@@ -1,0 +1,54 @@
+# --- Build output ---
+target/
+build/
+out/
+*.class
+
+# --- Runtime event log (the app writes history here) ---
+data/
+*.ndjson
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Maven Wrapper ---
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# --- IntelliJ IDEA ---
+.idea/
+*.iml
+*.iws
+*.ipr
+# keep shared run configs if any are committed later
+!.idea/runConfigurations/
+
+# --- Eclipse ---
+.classpath
+.project
+.settings/
+.apt_generated/
+
+# --- NetBeans ---
+nbproject/private/
+nbbuild/
+nbdist/
+.nb-gradle/
+
+# --- VS Code ---
+.vscode/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Secrets / local overrides ---
+*.local
+application-local.properties
+application-local.yml
+
+# --- Env ---
+.env

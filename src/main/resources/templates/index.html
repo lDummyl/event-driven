@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Event-driven demo</title>
+    <style>
+        :root { --bg:#0f172a; --panel:#1e293b; --line:#334155; --fg:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; }
+        * { box-sizing: border-box; }
+        body { margin:0; font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--fg); }
+        header { padding:20px 28px; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; }
+        h1 { font-size:20px; margin:0; }
+        header .meta { color:var(--muted); font-size:13px; }
+        main { padding:24px 28px; display:grid; grid-template-columns: 360px 1fr; gap:24px; align-items:start; }
+        @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+        .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px; }
+        .panel h2 { margin:0 0 14px; font-size:15px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+        .state-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px dashed var(--line); }
+        .state-row:last-child { border-bottom:none; }
+        .state-row b { color:var(--accent); font-weight:600; }
+        .field { display:flex; gap:8px; margin-bottom:10px; }
+        input { flex:1; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:#0b1220; color:var(--fg); }
+        button { padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:#0b1220; color:var(--fg); cursor:pointer; }
+        button:hover { border-color:var(--accent); color:var(--accent); }
+        button.primary { background:var(--accent); color:#04212f; border-color:var(--accent); font-weight:600; }
+        .hint { color:var(--muted); font-size:12px; margin:6px 0 12px; }
+        .actions { display:flex; flex-direction:column; gap:12px; }
+        .divider { height:1px; background:var(--line); margin:6px 0; }
+        #message { min-height:18px; font-size:13px; margin-top:10px; }
+        #message.err { color:#f87171; }
+        #message.ok { color:#4ade80; }
+        table { width:100%; border-collapse:collapse; font-size:12px; }
+        th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+        th { color:var(--muted); font-weight:600; }
+        .tag { padding:2px 7px; border-radius:999px; font-size:11px; border:1px solid var(--line); }
+        .tag.RECALCULABLE { color:#fbbf24; border-color:#b45309; }
+        .tag.FROZEN { color:#38bdf8; border-color:#0369a1; }
+        .mono { font-family: ui-monospace, Consolas, monospace; color:var(--muted); }
+        .empty { color:var(--muted); font-size:13px; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Event-driven demo</h1>
+    <span class="meta">current rule: <b th:text="'100 = ' + ${pointsPer100} + ' points'">100 = 200 points</b></span>
+    <span class="meta">log: <span class="mono" th:text="${logPath}">./data/event-log.ndjson</span></span>
+    <span class="meta" th:text="'wipe on start: ' + ${wipeOnStart}">wipe on start: true</span>
+</header>
+
+<main>
+    <section class="panel">
+        <h2>State (H2 projection)</h2>
+        <div class="state-row"><span>Username</span><b th:text="${state.username}">anon</b></div>
+        <div class="state-row"><span>Email</span><b th:text="${state.email}">anon@example.com</b></div>
+        <div class="state-row"><span>Points</span><b th:text="${state.points}">0</b></div>
+
+        <div class="divider"></div>
+
+        <h2>Online actions</h2>
+        <div class="actions">
+            <div class="field">
+                <input id="amount" type="number" placeholder="donation amount" value="100"/>
+                <button onclick="post('/api/donate', {amount: val('amount')})">Donate</button>
+            </div>
+            <div class="field">
+                <input id="username" type="text" placeholder="new username" value="12345"/>
+                <button onclick="post('/api/username', {name: val('username')})">Set username</button>
+            </div>
+            <div class="field">
+                <input id="email" type="text" placeholder="new email" value="me@legacy.mail"/>
+                <button onclick="post('/api/email', {email: val('email')})">Set email</button>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <h2>History &amp; rebuild</h2>
+        <p class="hint">Seeding writes an old-rules fact straight to the log, bypassing current validation.</p>
+        <div class="actions">
+            <div class="field">
+                <input id="legacyName" type="text" value="12345"/>
+                <button onclick="post('/api/seed/username', {name: val('legacyName')})">Seed legacy username</button>
+            </div>
+            <div class="field">
+                <input id="legacyEmail" type="text" value="boss@legacy.mail"/>
+                <button onclick="post('/api/seed/email', {email: val('legacyEmail')})">Seed legacy email</button>
+            </div>
+            <button class="primary" onclick="post('/api/rebuild', {})">Rebuild state from log</button>
+        </div>
+
+        <div id="message"></div>
+    </section>
+
+    <section class="panel">
+        <h2 th:text="'Eternal log (' + ${#lists.size(events)} + ')'">Eternal log</h2>
+        <table>
+            <thead>
+            <tr><th>#</th><th>type</th><th>kind</th><th>correlationId</th><th>occurredAt</th></tr>
+            </thead>
+            <tbody th:if="${#lists.isEmpty(events)}">
+            <tr><td colspan="5" class="empty">Log is empty.</td></tr>
+            </tbody>
+            <tbody th:unless="${#lists.isEmpty(events)}">
+            <tr th:each="event, iter : ${events}">
+                <td th:text="${iter.count}">1</td>
+                <td th:text="${event.type}">DonationReceived</td>
+                <td><span class="tag" th:classappend="${event.kind}" th:text="${event.kind}">FROZEN</span></td>
+                <td class="mono" th:text="${#strings.substring(event.correlationId, 0, 8)}">abcd1234</td>
+                <td class="mono" th:text="${event.occurredAt}">2026-01-01T00:00:00Z</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+</main>
+
+<script>
+    function val(id) { return document.getElementById(id).value; }
+
+    async function post(url, body) {
+        const el = document.getElementById('message');
+        el.className = '';
+        el.textContent = '...';
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body)
+            });
+            const data = await response.json();
+            if (data.ok) {
+                location.reload();
+            } else {
+                el.className = 'err';
+                el.textContent = data.message || 'Rejected';
+            }
+        } catch (e) {
+            el.className = 'err';
+            el.textContent = String(e);
+        }
+    }
+</script>
+</body>
+</html>
