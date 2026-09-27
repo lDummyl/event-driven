@@ -5,8 +5,9 @@ import java.util.List;
 import java.util.Map;
 
 import com.example.eventdriven.core.EventRouter;
-import com.example.eventdriven.log.EventLog;
-import com.example.eventdriven.service.CommandService;
+import com.example.eventdriven.core.EventStore;
+import com.example.eventdriven.service.DonationService;
+import com.example.eventdriven.service.UserPrimalDataService;
 import com.example.eventdriven.state.UserStateService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,34 +19,37 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 public class CommandController {
 
-    private final CommandService commands;
+    private final DonationService donations;
+    private final UserPrimalDataService userPrimalData;
     private final EventRouter router;
-    private final EventLog eventLog;
+    private final EventStore eventStore;
     private final UserStateService stateService;
 
-    public CommandController(CommandService commands,
+    public CommandController(DonationService donations,
+                             UserPrimalDataService userPrimalData,
                              EventRouter router,
-                             EventLog eventLog,
+                             EventStore eventStore,
                              UserStateService stateService) {
-        this.commands = commands;
+        this.donations = donations;
+        this.userPrimalData = userPrimalData;
         this.router = router;
-        this.eventLog = eventLog;
+        this.eventStore = eventStore;
         this.stateService = stateService;
     }
 
     @PostMapping("/donate")
     public Map<String, Object> donate(@RequestBody Map<String, String> body) {
-        return run(() -> commands.donate(Long.parseLong(body.getOrDefault("amount", "0"))));
+        return run(() -> donations.donate(Long.parseLong(body.getOrDefault("amount", "0"))));
     }
 
     @PostMapping("/username")
     public Map<String, Object> changeUsername(@RequestBody Map<String, String> body) {
-        return run(() -> commands.changeUsername(body.getOrDefault("name", "")));
+        return run(() -> userPrimalData.changeUsername(body.getOrDefault("name", "")));
     }
 
     @PostMapping("/email")
     public Map<String, Object> changeEmail(@RequestBody Map<String, String> body) {
-        return run(() -> commands.changeEmail(body.getOrDefault("email", "")));
+        return run(() -> userPrimalData.changeEmail(body.getOrDefault("email", "")));
     }
 
     @PostMapping("/rebuild")
@@ -55,12 +59,12 @@ public class CommandController {
 
     @PostMapping("/seed/username")
     public Map<String, Object> seedUsername(@RequestBody Map<String, String> body) {
-        return run(() -> commands.seedLegacyUsername(body.getOrDefault("name", "12345")));
+        return run(() -> userPrimalData.seedLegacyUsername(body.getOrDefault("name", "12345")));
     }
 
     @PostMapping("/seed/email")
     public Map<String, Object> seedEmail(@RequestBody Map<String, String> body) {
-        return run(() -> commands.seedLegacyEmail(body.getOrDefault("email", "boss@legacy.mail")));
+        return run(() -> userPrimalData.seedLegacyEmail(body.getOrDefault("email", "boss@legacy.mail")));
     }
 
     @GetMapping("/state")
@@ -82,7 +86,7 @@ public class CommandController {
         response.put("ok", ok);
         response.put("message", message);
         response.put("state", stateService.get());
-        List<String> log = eventLog.all().stream().map(Object::toString).toList();
+        List<String> log = eventStore.all().stream().map(Object::toString).toList();
         response.put("logSize", log.size());
         return response;
     }

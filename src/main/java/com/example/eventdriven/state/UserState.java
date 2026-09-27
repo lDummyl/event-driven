@@ -6,6 +6,9 @@ package com.example.eventdriven.state;
  */
 public class UserState {
 
+    /** Identity of the single aggregate owned by this projection (until multi-user arrives). */
+    public static final String AGGREGATE_ID = "user:1";
+
     private String username = "anon";
     private String email = "anon@example.com";
     private long points;

@@ -13,17 +13,17 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.example.eventdriven.config.LogProperties;
-import com.example.eventdriven.core.CorrelationLookup;
 import com.example.eventdriven.core.DomainEvent;
+import com.example.eventdriven.core.EventStore;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
 /**
  * The eternal log, kept in memory for fast replay and mirrored to an append-only NDJSON file so it
- * survives restarts. It doubles as the {@link CorrelationLookup} used during replay.
+ * survives restarts. It is the file-backed implementation of the {@link EventStore} port.
  */
 @Component
-public class EventLog implements CorrelationLookup {
+public class EventLog implements EventStore {
 
     private final Path path;
     private final EventCodec codec;
@@ -61,6 +61,7 @@ public class EventLog implements CorrelationLookup {
         }
     }
 
+    @Override
     public synchronized void append(DomainEvent event) {
         events.add(event);
         try {
@@ -71,6 +72,7 @@ public class EventLog implements CorrelationLookup {
         }
     }
 
+    @Override
     public synchronized void clear() {
         events.clear();
         try {
@@ -81,10 +83,19 @@ public class EventLog implements CorrelationLookup {
         }
     }
 
+    @Override
     public synchronized List<DomainEvent> all() {
         return List.copyOf(events);
     }
 
+    @Override
+    public synchronized List<DomainEvent> byAggregate(String aggregateId) {
+        return events.stream()
+                .filter(event -> aggregateId.equals(event.aggregateId()))
+                .toList();
+    }
+
+    @Override
     public synchronized int size() {
         return events.size();
     }

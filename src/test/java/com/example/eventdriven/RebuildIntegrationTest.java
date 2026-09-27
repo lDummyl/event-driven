@@ -1,8 +1,11 @@
 package com.example.eventdriven;
 
 import com.example.eventdriven.core.EventRouter;
-import com.example.eventdriven.log.EventLog;
-import com.example.eventdriven.service.CommandService;
+import com.example.eventdriven.core.EventStore;
+import com.example.eventdriven.core.Mode;
+import com.example.eventdriven.service.DonationService;
+import com.example.eventdriven.service.UserPrimalDataService;
+import com.example.eventdriven.state.UserState;
 import com.example.eventdriven.state.UserStateService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,24 +23,26 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class RebuildIntegrationTest {
 
     @Autowired
-    EventLog eventLog;
+    EventStore eventStore;
     @Autowired
     EventRouter router;
     @Autowired
     UserStateService stateService;
     @Autowired
-    CommandService commands;
+    DonationService donations;
+    @Autowired
+    UserPrimalDataService userPrimalData;
 
     @BeforeEach
     void clean() {
-        eventLog.clear();
+        eventStore.clear();
         router.rebuild();
     }
 
     @Test
     void frozenUsernameIsAcceptedOnRebuildEvenThoughCurrentRuleRejectsIt() {
-        commands.seedLegacyUsername("12345");
-        assertThatThrownBy(() -> commands.changeUsername("12345"))
+        userPrimalData.seedLegacyUsername("12345");
+        assertThatThrownBy(() -> userPrimalData.changeUsername("12345"))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(stateService.get().getUsername()).isNotEqualTo("12345");
 
@@ -48,24 +53,48 @@ class RebuildIntegrationTest {
 
     @Test
     void emailIsRestoredFromItsRecordedResponseByCorrelation() {
-        commands.seedLegacyEmail("boss@legacy.mail");
+        userPrimalData.seedLegacyEmail("boss@legacy.mail");
         router.rebuild();
         assertThat(stateService.get().getEmail()).isEqualTo("boss@legacy.mail");
     }
 
     @Test
     void onlineEmailChangeRejectsNewlyBannedDomain() {
-        assertThatThrownBy(() -> commands.changeEmail("me@legacy.mail"))
+        assertThatThrownBy(() -> userPrimalData.changeEmail("me@legacy.mail"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void donationIsRecalculatedOnRebuild() {
-        commands.donate(100);
+        donations.donate(100);
         assertThat(stateService.get().getPoints()).isEqualTo(200);
 
         router.rebuild();
 
         assertThat(stateService.get().getPoints()).isEqualTo(200);
+    }
+
+    @Test
+    void eventsCarryAggregateIdAndSchemaVersion() {
+        donations.donate(100);
+        var event = eventStore.all().get(0);
+        assertThat(event.aggregateId()).isEqualTo(UserState.AGGREGATE_ID);
+        assertThat(event.metadata().schemaVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void byAggregateFiltersEvents() {
+        donations.donate(100);
+        userPrimalData.seedLegacyUsername("12345");
+
+        assertThat(eventStore.byAggregate(UserState.AGGREGATE_ID)).hasSize(2);
+        assertThat(eventStore.byAggregate("user:999")).isEmpty();
+    }
+
+    @Test
+    void modeIsOnlineOutsideRebuild() {
+        assertThat(router.currentMode()).isEqualTo(Mode.ONLINE);
+        router.rebuild();
+        assertThat(router.currentMode()).isEqualTo(Mode.ONLINE);
     }
 }

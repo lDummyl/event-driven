@@ -1,10 +1,10 @@
 package com.example.eventdriven.domain;
 
-import java.time.Instant;
 import java.util.UUID;
 
 import com.example.eventdriven.core.DomainEvent;
 import com.example.eventdriven.core.EventKind;
+import com.example.eventdriven.core.EventMetadata;
 
 /**
  * Request half of an email change. {@code FROZEN}. During a rebuild this event looks up its recorded
@@ -12,13 +12,11 @@ import com.example.eventdriven.core.EventKind;
  * the email against the current rules.
  */
 public record EmailChangeRequested(
-        UUID id,
-        UUID correlationId,
-        Instant occurredAt,
+        EventMetadata metadata,
         String newEmail) implements DomainEvent {
 
-    public static EmailChangeRequested of(UUID correlationId, String newEmail) {
-        return new EmailChangeRequested(UUID.randomUUID(), correlationId, Instant.now(), newEmail);
+    public static EmailChangeRequested of(String aggregateId, UUID correlationId, String newEmail) {
+        return new EmailChangeRequested(EventMetadata.of(aggregateId, correlationId), newEmail);
     }
 
     @Override

@@ -1,5 +1,9 @@
 package com.example.eventdriven.state;
 
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
+
 import org.springframework.stereotype.Service;
 
 /**
@@ -14,6 +18,7 @@ public class UserStateService {
     private final UserStateRepository repository;
 
     private UserState working = UserState.empty();
+    private final Set<UUID> appliedEventIds = new HashSet<>();
 
     public UserStateService(UserStateRepository repository) {
         this.repository = repository;
@@ -22,6 +27,18 @@ public class UserStateService {
     /** Mutable working state, used by handlers through the router. */
     public synchronized UserState live() {
         return working;
+    }
+
+    /**
+     * Applies an event effect exactly once. The idempotency seam that protects the projection from
+     * duplicate delivery once it is fed by a live stream; on a full rebuild it is inert because the
+     * applied set is cleared first.
+     */
+    public synchronized void applyIfNew(UUID eventId, Runnable action) {
+        if (!appliedEventIds.add(eventId)) {
+            return;
+        }
+        action.run();
     }
 
     /** A defensive copy backed by the DB projection (falls back to memory before first persist). */
@@ -48,6 +65,7 @@ public class UserStateService {
 
     public synchronized void reset() {
         working = UserState.empty();
+        appliedEventIds.clear();
         repository.deleteAll();
         persist();
     }

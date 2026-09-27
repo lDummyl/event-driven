@@ -12,13 +12,13 @@ class DonationHandlerTest {
 
     @Test
     void usesOldRuleWhenConfigured() {
-        handlerWithRate(200).apply(state, DonationReceived.of(100, 999));
+        handlerWithRate(200).apply(state, DonationReceived.of(UserState.AGGREGATE_ID, 100, 999));
         assertThat(state.getPoints()).isEqualTo(200);
     }
 
     @Test
     void usesNewRuleWhenConfigured() {
-        handlerWithRate(50).apply(state, DonationReceived.of(100, 999));
+        handlerWithRate(50).apply(state, DonationReceived.of(UserState.AGGREGATE_ID, 100, 999));
         assertThat(state.getPoints()).isEqualTo(50);
     }
 
